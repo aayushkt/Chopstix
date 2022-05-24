@@ -12,7 +12,7 @@ Stop plays in his own separate way entirely. Implementing Machine Learning techn
 
 ## How to Play
 
-The game itself is quite simple. Each player has two hands, with one finger raised on each hand. The players decide who goes first. The first player can tap either hand with a raised finger on any opponent's hand with a raised finger. Upon doing so, the opponent adds that many fingers to their hand.
+The game itself is quite simple. Each player has two hands, and begins with one finger raised on each hand. The players decide who goes first. The first player can tap either hand with a raised finger on any opponent's hand with a raised finger. Upon doing so, the opponent adds that many fingers to their hand.
 
 For example, say Alice has 2 fingers raised on her left hand and 3 on her right, while Bob has 1 finger raised on his left hand and 2 on his right. Alice can then tap her left hand on Bob's left hand, leaving her hands unchanged, but Bob now has 4 fingers raised on his left hand and 2 on his right.
 

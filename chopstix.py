@@ -1,5 +1,39 @@
-import igraph
+class Graph:
+    parents = []
+    children = []
+    vertexCount = 0
+    handSet = []
 
+    def __init__(self, numOfFingers):
+        self.handSet = generateHandSet(numOfFingers)
+        self.vertexCount = len(self.handSet) * len(self.handSet) * 2
+        self.vertexCount = self.vertexCount
+        for _ in range(0, self.vertexCount):
+            self.parents.append([])
+            self.children.append([])
+
+    def updateGraph(self, childIndexes, parentIndex):
+        for childIndex in childIndexes:
+            self.parents[childIndex].append(parentIndex)
+            self.children[parentIndex].append(childIndexes)
+
+    def printGraph(self):
+        for node in range(0, self.vertexCount):
+            if len(self.children[node]) == 0:
+                print(f"{node}: has no children;")
+            else:
+                print(f"{node}: {self.children[node]};")
+
+    def printAllParents(self):
+        for node in range(0, self.vertexCount):
+            if len(self.parents[node]) == 0:
+                print(f"{node}: has no parents;")
+            else:
+                print(f"{node}: {self.parents[node]};")
+
+# Returns the state notation for the given node index
+# i.e. if the numOfFingers per hand is 5, then node 63
+# would be the state ((0, 4), (0, 3), 0)
 def nodeIndexToState(index, handSet):
     numOfHands = len(handSet)
     playerTurn = int(index >= numOfHands * numOfHands)
@@ -7,6 +41,9 @@ def nodeIndexToState(index, handSet):
     playerOneHandIndex = index % numOfHands
     return (handSet[playerZeroHandIndex], handSet[playerOneHandIndex], playerTurn)
 
+# Returns the node index for the given state notation
+# i.e. if the numOfFingers per hand is 5, then the 
+# state ((0, 4), (0, 3), 0) would be node index 63
 def stateToNodeIndex(state, handSet):
     output = 0
     output += handSet.index(state[0]) * len(handSet)
@@ -104,16 +141,23 @@ def getChildrenOfNode(parentState, numOfFingers):
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
                 childStates.append((RL, parentState[1], parentState[2]))
-    childStates =  removeDuplicates(childStates)
+    # Finally, if a state leads to another state in more than one way
+    # (often caused by symmetrical hands etc.), then we can remove
+    # the additional unnecessary copies 
+    childStates =  __removeDuplicates__(childStates)
     return childStates
 
-def removeDuplicates(listObj):
+# Helper function for getChildrenOfNode()
+# Removes repeated elements from a list
+def __removeDuplicates__(listObj):
     temp = []
     for item in listObj:
         if item not in temp:
             temp.append(item)
     return temp
 
+# Checks to see whether either player has
+# Lost the game yet
 def isGameOver(state):
     if state[0][0] or state[0][1]:
         return False
@@ -121,10 +165,11 @@ def isGameOver(state):
         return False
     return True
 
-numOfFingers = 5
-handSet = generateHandSet(numOfFingers)
-numOfNodes = len(handSet) * len(handSet) * 2
-state = ((4, 4), (3, 4), 1)
-print(getChildrenOfNode(state, numOfFingers))
-
-# cs = igraph.Graph()
+# Iterates through a list of state notations
+# and returns the corresponding list of node 
+# indexes
+def getChildStateIndexes(childStates):
+    childIndexes = []
+    for state in childStates:
+        childIndexes.append(stateToNodeIndex(state))
+    return childIndexes

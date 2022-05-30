@@ -2,9 +2,11 @@ class Graph:
     parents = []
     children = []
     vertexCount = 0
+    numOfFingers = 0
     handSet = []
 
     def __init__(self, numOfFingers):
+        self.numOfFingers = numOfFingers
         self.handSet = generateHandSet(numOfFingers)
         self.vertexCount = len(self.handSet) * len(self.handSet) * 2
         self.vertexCount = self.vertexCount
@@ -19,10 +21,14 @@ class Graph:
 
     def printGraph(self):
         for node in range(0, self.vertexCount):
+            nodeState = nodeIndexToState(node, self.handSet)
             if len(self.children[node]) == 0:
-                print(f"{node}: has no children;")
+                print(f"{nodeState}: has no children;")
             else:
-                print(f"{node}: {self.children[node]};")
+                childStateList = []
+                for childIndex in self.children[node]:
+                    childStateList.append(nodeIndexToState(childIndex, self.handSet))
+                print(f"{nodeState}: {childStateList};")
 
     def printAllParents(self):
         for node in range(0, self.vertexCount):
@@ -31,13 +37,30 @@ class Graph:
             else:
                 print(f"{node}: {self.parents[node]};")
 
+    def populateGraph(self):
+        for node in range(0, self.vertexCount):
+            childrenStates = getChildrenOfNode(nodeIndexToState(node, self.handSet), self.numOfFingers)
+            for state in childrenStates:
+                childIndex = stateToNodeIndex(state, self.handSet)
+                self.parents[childIndex].append(node)
+                self.children[node].append(childIndex)
+
+    def playerWhoWins(self, nodeIndex):
+        state = nodeIndexToState(nodeIndex, self.handSet)
+        if state[0] == (0, 0):
+            return 1
+        elif state[1] == (0, 0):
+            return 0
+        else:
+            return -1
+
 # Returns the state notation for the given node index
 # i.e. if the numOfFingers per hand is 5, then node 63
 # would be the state ((0, 4), (0, 3), 0)
 def nodeIndexToState(index, handSet):
     numOfHands = len(handSet)
     playerTurn = int(index >= numOfHands * numOfHands)
-    playerZeroHandIndex = (int(index / 15)) % (15)
+    playerZeroHandIndex = (int(index / numOfHands)) % (numOfHands)
     playerOneHandIndex = index % numOfHands
     return (handSet[playerZeroHandIndex], handSet[playerOneHandIndex], playerTurn)
 
@@ -86,13 +109,13 @@ def getChildrenOfNode(parentState, numOfFingers):
                 # Make sure it is in the proper increasing order notation
                 if LR[0] > LR[1]:
                     LR = (LR[1], LR[0])
-                childStates.append((parentState[0], LR, parentState[2]))
+                childStates.append((parentState[0], LR, 1))
             
             if parentState[1][0]:
                 LL = ((parentState[1][0] + parentState[0][0]) % numOfFingers, parentState[1][1])
                 if LL[0] > LL[1]:
                     LL = (LL[1], LL[0])
-                childStates.append((parentState[0], LL, parentState[2]))
+                childStates.append((parentState[0], LL, 1))
 
         if parentState[0][1]:
             # Similarly, if player zero has fingers on their right hand
@@ -102,13 +125,13 @@ def getChildrenOfNode(parentState, numOfFingers):
                 RR = (parentState[1][0], (parentState[1][1] + parentState[0][1]) % numOfFingers)
                 if RR[0] > RR[1]:
                     RR = (RR[1], RR[0])
-                childStates.append((parentState[0], LR, parentState[2]))
+                childStates.append((parentState[0], RR, 1))
             
             if parentState[1][0]:
                 RL = ((parentState[1][0] + parentState[0][1]) % numOfFingers, parentState[1][1])
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
-                childStates.append((parentState[0], LL, parentState[2]))
+                childStates.append((parentState[0], RL, 1))
     else:
         if parentState[1][0]:
             # Similarly, if it's player one's turn and they have
@@ -118,13 +141,13 @@ def getChildrenOfNode(parentState, numOfFingers):
                 LR = (parentState[0][0], (parentState[0][1] + parentState[1][0]) % numOfFingers)
                 if LR[0] > LR[1]:
                     LR = (LR[1], LR[0])
-                childStates.append((LR, parentState[1], parentState[2]))
+                childStates.append((LR, parentState[1], 0))
             
             if parentState[0][0]:
                 LL = ((parentState[0][0] + parentState[1][0]) % numOfFingers, parentState[0][1])
                 if LL[0] > LL[1]:
                     LL = (LL[1], LL[0])
-                childStates.append((LL, parentState[1], parentState[2]))
+                childStates.append((LL, parentState[1], 0))
 
         if parentState[1][1]:
             # Finally we check if its player one's turn and they have
@@ -134,13 +157,13 @@ def getChildrenOfNode(parentState, numOfFingers):
                 RR = (parentState[0][0], (parentState[0][1] + parentState[1][1]) % numOfFingers)
                 if RR[0] > RR[1]:
                     RR = (RR[1], RR[0])
-                childStates.append((RR, parentState[1], parentState[2]))
+                childStates.append((RR, parentState[1], 0))
             
             if parentState[1][0]:
                 RL = ((parentState[0][0] + parentState[1][1]) % numOfFingers, parentState[0][1])
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
-                childStates.append((RL, parentState[1], parentState[2]))
+                childStates.append((RL, parentState[1], 0))
     # Finally, if a state leads to another state in more than one way
     # (often caused by symmetrical hands etc.), then we can remove
     # the additional unnecessary copies 
@@ -173,3 +196,8 @@ def getChildStateIndexes(childStates):
     for state in childStates:
         childIndexes.append(stateToNodeIndex(state))
     return childIndexes
+
+if __name__ == "__main__":
+    handSet = generateHandSet(3)
+    a = nodeIndexToState(7, handSet)
+    print(a)

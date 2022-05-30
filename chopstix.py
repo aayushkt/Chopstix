@@ -1,3 +1,5 @@
+import random
+
 class Graph:
     parents = []
     children = []
@@ -13,6 +15,7 @@ class Graph:
         for _ in range(0, self.vertexCount):
             self.parents.append([])
             self.children.append([])
+        self.populateGraph()
 
     def updateGraph(self, childIndexes, parentIndex):
         for childIndex in childIndexes:
@@ -153,13 +156,13 @@ def getChildrenOfNode(parentState, numOfFingers):
             # Finally we check if its player one's turn and they have
             # fingers on their right hand, then we check whether player
             # zero has fingers on their left or right hands to add to
-            if parentState[0][0]:
+            if parentState[0][1]:
                 RR = (parentState[0][0], (parentState[0][1] + parentState[1][1]) % numOfFingers)
                 if RR[0] > RR[1]:
                     RR = (RR[1], RR[0])
                 childStates.append((RR, parentState[1], 0))
             
-            if parentState[1][0]:
+            if parentState[0][0]:
                 RL = ((parentState[0][0] + parentState[1][1]) % numOfFingers, parentState[0][1])
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
@@ -198,6 +201,7 @@ def getChildStateIndexes(childStates):
     return childIndexes
 
 if __name__ == "__main__":
-    handSet = generateHandSet(3)
-    a = nodeIndexToState(7, handSet)
+    g = Graph(7)
+    a = nodeIndexToState(54, g.handSet)
+    b = stateToNodeIndex()
     print(a)

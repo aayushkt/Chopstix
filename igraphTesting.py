@@ -36,9 +36,11 @@ def graphSolver(graph):
     rankings = np.linalg.solve(arr, solution)
     return rankings
     
-g = cx.Graph(7)
+g = cx.Graph(5)
 
 ranks = graphSolver(g)
+
+# Matrix is non invertible for numOfFingers = 5, 8, 10, 11, 12
 
 bestDiff = 2
 fairestNode = -1

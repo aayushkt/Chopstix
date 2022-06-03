@@ -96,82 +96,121 @@ def generateHandSet(numOfFingers):
 # i.e. [((1, 3), (0, 0), 1), ((1, 3), (0, 2), 1)]
 def getChildrenOfNode(parentState, numOfFingers):
     childStates = []
-    if isGameOver(parentState):
-        return childStates
+    tapStates = getAllTapStates(parentState, numOfFingers)
+    for state in tapStates:
+        childStates.append(state)
+    switchStates = getAllSwitchStates(parentState, numOfFingers)
+    for state in switchStates:
+        childStates.append(state)
+    childStates = __removeDuplicates__(childStates)
+    return childStates
+
+def getAllSwitchStates(state, numOfFingers):
+    switchStates = []
+    if isGameOver(state):
+        return switchStates
+    if state[2] == 0:
+        activePlayerState = state[0]
+        fingerSum = state[0][0] + state[0][1]
+    else:
+        activePlayerState = state[1]
+        fingerSum = state[1][0] + state[1][1]
+    for leftHand in range(0, numOfFingers + 1):
+        rightHand = fingerSum - leftHand
+        if rightHand >= 0 and rightHand <= numOfFingers and not (leftHand, rightHand) == activePlayerState:
+            leftHand = leftHand % numOfFingers
+            rightHand = rightHand % numOfFingers
+            if leftHand > rightHand:
+                temp = leftHand
+                leftHand = rightHand
+                rightHand = temp
+            if state[2] == 0:
+                switchStates.append(((leftHand, rightHand), state[1], 1))
+            else:
+                switchStates.append((state[0], (leftHand, rightHand), 1))
+
+
+    switchStates = __removeDuplicates__(switchStates)
+    return switchStates
+
+def getAllTapStates(state, numOfFingers):
+    tapStates = []
+    if isGameOver(state):
+        return tapStates
     # If it is player zero's turn,
-    if parentState[2] == 0:
+    if state[2] == 0:
         # Check to see if player zero has fingers on their left hand
-        if parentState[0][0]:
+        if state[0][0]:
             # If player zero (the current player whose turn it is) has 
             # fingers on their left hand, and player one has fingers on
             # their right hand, then player one can have the new hand of
             # LR, determined by player zero hitting their left hand on 
             # player one's right hand.
-            if parentState[1][1]:
-                LR = (parentState[1][0], (parentState[1][1] + parentState[0][0]) % numOfFingers)
+            if state[1][1]:
+                LR = (state[1][0], (state[1][1] + state[0][0]) % numOfFingers)
                 # Make sure it is in the proper increasing order notation
                 if LR[0] > LR[1]:
                     LR = (LR[1], LR[0])
-                childStates.append((parentState[0], LR, 1))
+                tapStates.append((state[0], LR, 1))
             
-            if parentState[1][0]:
-                LL = ((parentState[1][0] + parentState[0][0]) % numOfFingers, parentState[1][1])
+            if state[1][0]:
+                LL = ((state[1][0] + state[0][0]) % numOfFingers, state[1][1])
                 if LL[0] > LL[1]:
                     LL = (LL[1], LL[0])
-                childStates.append((parentState[0], LL, 1))
+                tapStates.append((state[0], LL, 1))
 
-        if parentState[0][1]:
+        if state[0][1]:
             # Similarly, if player zero has fingers on their right hand
             # They can add it to their opponents left or right hand if
             # those hands have fingers on them
-            if parentState[1][1]:
-                RR = (parentState[1][0], (parentState[1][1] + parentState[0][1]) % numOfFingers)
+            if state[1][1]:
+                RR = (state[1][0], (state[1][1] + state[0][1]) % numOfFingers)
                 if RR[0] > RR[1]:
                     RR = (RR[1], RR[0])
-                childStates.append((parentState[0], RR, 1))
+                tapStates.append((state[0], RR, 1))
             
-            if parentState[1][0]:
-                RL = ((parentState[1][0] + parentState[0][1]) % numOfFingers, parentState[1][1])
+            if state[1][0]:
+                RL = ((state[1][0] + state[0][1]) % numOfFingers, state[1][1])
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
-                childStates.append((parentState[0], RL, 1))
+                tapStates.append((state[0], RL, 1))
     else:
-        if parentState[1][0]:
+        if state[1][0]:
             # Similarly, if it's player one's turn and they have
             # fingers on their left hand, check whether player 
             # zero has fingers on their right and left hands
-            if parentState[0][1]:
-                LR = (parentState[0][0], (parentState[0][1] + parentState[1][0]) % numOfFingers)
+            if state[0][1]:
+                LR = (state[0][0], (state[0][1] + state[1][0]) % numOfFingers)
                 if LR[0] > LR[1]:
                     LR = (LR[1], LR[0])
-                childStates.append((LR, parentState[1], 0))
+                tapStates.append((LR, state[1], 0))
             
-            if parentState[0][0]:
-                LL = ((parentState[0][0] + parentState[1][0]) % numOfFingers, parentState[0][1])
+            if state[0][0]:
+                LL = ((state[0][0] + state[1][0]) % numOfFingers, state[0][1])
                 if LL[0] > LL[1]:
                     LL = (LL[1], LL[0])
-                childStates.append((LL, parentState[1], 0))
+                tapStates.append((LL, state[1], 0))
 
-        if parentState[1][1]:
+        if state[1][1]:
             # Finally we check if its player one's turn and they have
             # fingers on their right hand, then we check whether player
             # zero has fingers on their left or right hands to add to
-            if parentState[0][1]:
-                RR = (parentState[0][0], (parentState[0][1] + parentState[1][1]) % numOfFingers)
+            if state[0][1]:
+                RR = (state[0][0], (state[0][1] + state[1][1]) % numOfFingers)
                 if RR[0] > RR[1]:
                     RR = (RR[1], RR[0])
-                childStates.append((RR, parentState[1], 0))
+                tapStates.append((RR, state[1], 0))
             
-            if parentState[0][0]:
-                RL = ((parentState[0][0] + parentState[1][1]) % numOfFingers, parentState[0][1])
+            if state[0][0]:
+                RL = ((state[0][0] + state[1][1]) % numOfFingers, state[0][1])
                 if RL[0] > RL[1]:
                     RL = (RL[1], RL[0])
-                childStates.append((RL, parentState[1], 0))
+                tapStates.append((RL, state[1], 0))
     # Finally, if a state leads to another state in more than one way
     # (often caused by symmetrical hands etc.), then we can remove
     # the additional unnecessary copies 
-    childStates =  __removeDuplicates__(childStates)
-    return childStates
+    tapStates =  __removeDuplicates__(tapStates)
+    return tapStates
 
 # Helper function for getChildrenOfNode()
 # Removes repeated elements from a list
@@ -201,7 +240,6 @@ def getChildStateIndexes(childStates):
     return childIndexes
 
 if __name__ == "__main__":
-    g = Graph(7)
-    a = nodeIndexToState(54, g.handSet)
-    b = stateToNodeIndex()
+    state = ((1, 4), (3, 4), 0)
+    a = getAllSwitchStates(state, 5)
     print(a)

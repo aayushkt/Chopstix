@@ -1,5 +1,3 @@
-import random
-
 class Graph:
     parents = []
     children = []
@@ -12,10 +10,29 @@ class Graph:
         self.handSet = generateHandSet(numOfFingers)
         self.vertexCount = len(self.handSet) * len(self.handSet) * 2
         self.vertexCount = self.vertexCount
-        for _ in range(0, self.vertexCount):
+        for nodeIndex in range(0, self.vertexCount):
             self.parents.append([])
             self.children.append([])
         self.populateGraph()
+
+    def getSolutionsForUnreachableStates(self):
+        # returns a vector of length vertexCount where the nth
+        # element is 0.5 iff the nth nodeIndex results
+        # in a loop that is impossible to exit (the game
+        # can never end). 
+        endIsReachable = [0] * self.vertexCount
+        checkIfParentsAreReachable = []
+        for nodeIndex in range(0, self.vertexCount):
+            temp = gameOverStatus(nodeIndexToState(nodeIndex, self.handSet))
+            if temp == 0 or temp == 1:
+                checkIfParentsAreReachable.append(nodeIndex)
+                endIsReachable[nodeIndex] = 0.5
+        while(len(checkIfParentsAreReachable)):
+            currNode = checkIfParentsAreReachable.pop()
+            endIsReachable[currNode] = 0.5
+            for parent in self.parents[currNode]:
+                if not endIsReachable[parent]:
+                    checkIfParentsAreReachable.append(parent)
 
     def updateGraph(self, childIndexes, parentIndex):
         for childIndex in childIndexes:
@@ -42,27 +59,37 @@ class Graph:
 
     def populateGraph(self):
         for node in range(0, self.vertexCount):
-            childrenStates = getChildrenOfNode(nodeIndexToState(node, self.handSet), self.numOfFingers)
+            childrenStates = getChildrenOfNode(nodeIndexToState(node, self.handSet), self.numOfFingers, self.handSet)
             for state in childrenStates:
                 childIndex = stateToNodeIndex(state, self.handSet)
                 self.parents[childIndex].append(node)
                 self.children[node].append(childIndex)
 
-    def playerWhoWins(self, nodeIndex):
-        state = nodeIndexToState(nodeIndex, self.handSet)
-        if state[0] == (0, 0):
-            return 1
-        elif state[1] == (0, 0):
-            return 0
-        else:
-            return -1
+    def initializeReachable(self, checkIfParentsAreReachable):
+        while(len(checkIfParentsAreReachable) > 0):
+            node = checkIfParentsAreReachable.pop()
+            for parent in self.parents[node]:
+                if not self.endIsReachable[parent]:
+                    self.endIsReachable[parent] = 1
+                    checkIfParentsAreReachable.append(parent)
+        
+def gameOverStatus(nodeIndex, handSet):
+    state = nodeIndexToState(nodeIndex, handSet)
+    if state[0] == (0, 0) and state[1] == (0, 0):
+        return 0.5
+    elif state[0] == (0, 0):
+        return 0
+    elif state[1] == (0, 0):
+        return 1
+    else:
+        return -1
 
 # Returns the state notation for the given node index
 # i.e. if the numOfFingers per hand is 5, then node 63
 # would be the state ((0, 4), (0, 3), 0)
 def nodeIndexToState(index, handSet):
     numOfHands = len(handSet)
-    playerTurn = int(index >= numOfHands * numOfHands)
+    playerTurn = int(index >= (numOfHands * numOfHands))
     playerZeroHandIndex = (int(index / numOfHands)) % (numOfHands)
     playerOneHandIndex = index % numOfHands
     return (handSet[playerZeroHandIndex], handSet[playerOneHandIndex], playerTurn)
@@ -94,20 +121,20 @@ def generateHandSet(numOfFingers):
 # INPUT: a state in state notation form i.e. ((1, 3), (0, 4), 0)
 # OUTPUT: a list of states in state notation form (can be empty!)
 # i.e. [((1, 3), (0, 0), 1), ((1, 3), (0, 2), 1)]
-def getChildrenOfNode(parentState, numOfFingers):
+def getChildrenOfNode(parentState, numOfFingers, handSet):
     childStates = []
     tapStates = getAllTapStates(parentState, numOfFingers)
     for state in tapStates:
         childStates.append(state)
-    switchStates = getAllSwitchStates(parentState, numOfFingers)
+    switchStates = getAllSwitchStates(parentState, numOfFingers, handSet)
     for state in switchStates:
         childStates.append(state)
     childStates = __removeDuplicates__(childStates)
     return childStates
 
-def getAllSwitchStates(state, numOfFingers):
+def getAllSwitchStates(state, numOfFingers, handSet):
     switchStates = []
-    if isGameOver(state):
+    if (gameOverStatus(state, handSet) + 1):
         return switchStates
     if state[2] == 0:
         activePlayerState = state[0]
@@ -128,88 +155,36 @@ def getAllSwitchStates(state, numOfFingers):
                 switchStates.append(((leftHand, rightHand), state[1], 1))
             else:
                 switchStates.append((state[0], (leftHand, rightHand), 1))
-
-
     switchStates = __removeDuplicates__(switchStates)
     return switchStates
 
 def getAllTapStates(state, numOfFingers):
     tapStates = []
-    if isGameOver(state):
-        return tapStates
-    # If it is player zero's turn,
-    if state[2] == 0:
-        # Check to see if player zero has fingers on their left hand
-        if state[0][0]:
-            # If player zero (the current player whose turn it is) has 
-            # fingers on their left hand, and player one has fingers on
-            # their right hand, then player one can have the new hand of
-            # LR, determined by player zero hitting their left hand on 
-            # player one's right hand.
-            if state[1][1]:
-                LR = (state[1][0], (state[1][1] + state[0][0]) % numOfFingers)
-                # Make sure it is in the proper increasing order notation
-                if LR[0] > LR[1]:
-                    LR = (LR[1], LR[0])
-                tapStates.append((state[0], LR, 1))
-            
-            if state[1][0]:
-                LL = ((state[1][0] + state[0][0]) % numOfFingers, state[1][1])
-                if LL[0] > LL[1]:
-                    LL = (LL[1], LL[0])
-                tapStates.append((state[0], LL, 1))
-
-        if state[0][1]:
-            # Similarly, if player zero has fingers on their right hand
-            # They can add it to their opponents left or right hand if
-            # those hands have fingers on them
-            if state[1][1]:
-                RR = (state[1][0], (state[1][1] + state[0][1]) % numOfFingers)
-                if RR[0] > RR[1]:
-                    RR = (RR[1], RR[0])
-                tapStates.append((state[0], RR, 1))
-            
-            if state[1][0]:
-                RL = ((state[1][0] + state[0][1]) % numOfFingers, state[1][1])
-                if RL[0] > RL[1]:
-                    RL = (RL[1], RL[0])
-                tapStates.append((state[0], RL, 1))
-    else:
-        if state[1][0]:
-            # Similarly, if it's player one's turn and they have
-            # fingers on their left hand, check whether player 
-            # zero has fingers on their right and left hands
-            if state[0][1]:
-                LR = (state[0][0], (state[0][1] + state[1][0]) % numOfFingers)
-                if LR[0] > LR[1]:
-                    LR = (LR[1], LR[0])
-                tapStates.append((LR, state[1], 0))
-            
-            if state[0][0]:
-                LL = ((state[0][0] + state[1][0]) % numOfFingers, state[0][1])
-                if LL[0] > LL[1]:
-                    LL = (LL[1], LL[0])
-                tapStates.append((LL, state[1], 0))
-
-        if state[1][1]:
-            # Finally we check if its player one's turn and they have
-            # fingers on their right hand, then we check whether player
-            # zero has fingers on their left or right hands to add to
-            if state[0][1]:
-                RR = (state[0][0], (state[0][1] + state[1][1]) % numOfFingers)
-                if RR[0] > RR[1]:
-                    RR = (RR[1], RR[0])
-                tapStates.append((RR, state[1], 0))
-            
-            if state[0][0]:
-                RL = ((state[0][0] + state[1][1]) % numOfFingers, state[0][1])
-                if RL[0] > RL[1]:
-                    RL = (RL[1], RL[0])
-                tapStates.append((RL, state[1], 0))
-    # Finally, if a state leads to another state in more than one way
-    # (often caused by symmetrical hands etc.), then we can remove
-    # the additional unnecessary copies 
-    tapStates =  __removeDuplicates__(tapStates)
+    for playerHand in range(0, 2):
+        if state[state[2]][playerHand]:
+            for oppHand in range(0, 2):
+                # Notice 1-state[2] returns the player whose turn it
+                # is NOT, aka the opponent
+                if state[1 - state[2]][oppHand]:
+                    # sum is the amount of fingers that will be on the 
+                    # new hand (belonging to the opponent) after it has been tapped
+                    sum = (state[state[2]][playerHand] + state[1-state[2]][oppHand]) % numOfFingers
+                    if (playerHand + oppHand) == 0:
+                        newHands = (sum, state[1 - state[2]][1])
+                    elif (playerHand + oppHand) == 2:
+                        newHands = ((state[1 - state[2]][0], sum))
+                    elif playerHand == 1: # Then we know oppHand == 0,
+                        newHands = (sum, state[1-state[2]][1])
+                    else: # We know playerHand==0 and oppHand==1
+                        newHands = (state[1 - state[2]][0], sum)
+                    if newHands[0] > newHands[1]:
+                        newHands = (newHands[1], newHands[0])
+                    if state[2]:
+                        newState = (newHands, state[1], 0)
+                    else:
+                        newState = (state[0], newHands, 1)
+                    tapStates.append(newState)
+    tapStates = __removeDuplicates__(tapStates)
     return tapStates
 
 # Helper function for getChildrenOfNode()
@@ -221,15 +196,6 @@ def __removeDuplicates__(listObj):
             temp.append(item)
     return temp
 
-# Checks to see whether either player has
-# Lost the game yet
-def isGameOver(state):
-    if state[0][0] or state[0][1]:
-        return False
-    if state[1][0] or state[1][1]:
-        return False
-    return True
-
 # Iterates through a list of state notations
 # and returns the corresponding list of node 
 # indexes
@@ -240,6 +206,5 @@ def getChildStateIndexes(childStates):
     return childIndexes
 
 if __name__ == "__main__":
-    state = ((1, 4), (3, 4), 0)
-    a = getAllSwitchStates(state, 5)
-    print(a)
+    g = Graph(5)
+    print(g.getSolutionsForUnreachableStates)

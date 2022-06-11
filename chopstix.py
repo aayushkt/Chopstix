@@ -20,27 +20,51 @@ class Graph:
     # in a loop that is impossible to exit (the game
     # can never end). All other entries are 0
     def getSolutionsForUnreachableStates(self):
-        endIsReachable = [0] * self.vertexCount
+        endIsReachable = [0.5] * self.vertexCount
         checkIfParentsAreReachable = []
         for nodeIndex in range(0, self.vertexCount):
-            temp = self.gameOverStatus(self.nodeIndexToState(nodeIndex))
+            temp = self.gameOverStatus(nodeIndex)
             if temp == 0 or temp == 1:
                 checkIfParentsAreReachable.append(nodeIndex)
-                endIsReachable[nodeIndex] = 0.5
+                endIsReachable[nodeIndex] = 0
         while(len(checkIfParentsAreReachable)):
             currNode = checkIfParentsAreReachable.pop()
-            endIsReachable[currNode] = 0.5
+            endIsReachable[currNode] = 0
             for parent in self.parents[currNode]:
-                if not endIsReachable[parent]:
+                if endIsReachable[parent]:
                     checkIfParentsAreReachable.append(parent)
+        return endIsReachable
 
     # Returns a vector of length vertexCount where the nth
     # element is: a 0 iff player 0 can guaranteed win from the
     # nth node, a 1 iff player 1 can guaranteed win from the nth
     # node, -1 otherwise
     def getSolutionsForPerfectPlay(self):
-        # TODO
-        return
+        solution = [-1] * self.vertexCount
+        nodesToEvaluate = []
+        for nodeIndex in range(0, self.vertexCount):
+            temp = self.gameOverStatus(nodeIndex)
+            if temp == 0 or temp == 1:
+                for parent in self.parents[nodeIndex]:
+                    nodesToEvaluate.append(parent)
+                solution[nodeIndex] = temp
+        while(len(nodesToEvaluate)):
+            currNode = nodesToEvaluate.pop()
+            if solution[currNode] != -1: continue
+            for child in self.children[currNode]:
+                if solution[child] == self.nodeIndexToState(currNode)[2]:
+                    solution[currNode] = solution[child]
+                    for parent in self.parents[currNode]:
+                        nodesToEvaluate.append(parent)
+                        break
+            allChildrenMatch = True
+            for child in self.children[currNode]:
+                allChildrenMatch = (solution[child] == solution[self.children[currNode][0]] and solution[child] != -1)
+            if allChildrenMatch: 
+                solution[currNode] = solution[self.children[currNode][0]]
+                for parent in self.parents[currNode]:
+                    nodesToEvaluate.append(parent)
+        return solution
 
     # Prints the entire graph structure. Used for debugging
     def printGraph(self):
@@ -207,5 +231,7 @@ class Graph:
         return listOfIndexes
 
 if __name__ == "__main__":
-    g = Graph(5)
-    print(g.getSolutionsForUnreachableStates)
+    g = Graph(3)
+    ans = g.getSolutionsForPerfectPlay()
+    for x in range (0, g.vertexCount):
+        print(f"{g.nodeIndexToState(x)} == {ans[x]}")

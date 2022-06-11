@@ -50,9 +50,11 @@ def evaluateMatrix(ranks):
     print(f"Num of Zeros is {numOfZeros}")
     print(f"Fairest node is {fairestNode}")
     print(f"Average (should be 0.5) is {avg}")
-    print(f"Chance is {bestDiff}")
 
 g = cx.Graph(3)
+a = g.getSolutionsForPerfectPlay()
 (M, b) = makeMatrix(g)
 ans = np.linalg.solve(M, b)
 evaluateMatrix(ans)
+print(g.nodeIndexToState(38))
+

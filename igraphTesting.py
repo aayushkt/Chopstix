@@ -37,7 +37,9 @@ def evaluateMatrix(ranks):
     sum = 0
     numOfOnes = 0
     numOfZeros = 0
-    for node in range(1, len(ranks)):
+    for node in range(0, len(ranks)):
+        if node == 0 or node == 225:
+            continue
         if(ranks[node] == 1): numOfOnes += 1
         if(ranks[node] == 0): numOfZeros += 1
         diff = abs(ranks[node] - 0.5)
@@ -48,13 +50,13 @@ def evaluateMatrix(ranks):
     avg = sum/(len(ranks) - 1)
     print(f"Num of Ones is {numOfOnes}")
     print(f"Num of Zeros is {numOfZeros}")
-    print(f"Fairest node is {fairestNode}")
+    print(f"Fairest node is {fairestNode} with rank of {bestDiff + 0.5}")
     print(f"Average (should be 0.5) is {avg}")
 
-g = cx.Graph(3)
+g = cx.Graph(5)
 a = g.getSolutionsForPerfectPlay()
 (M, b) = makeMatrix(g)
 ans = np.linalg.solve(M, b)
 evaluateMatrix(ans)
-print(g.nodeIndexToState(38))
+print(g.nodeIndexToState(98))
 

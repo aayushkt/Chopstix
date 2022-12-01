@@ -19,90 +19,90 @@ class Graph:
         self.initializeGraphEdges()
 
     # returns a vector of length vertexCount where the nth
-    # element is 0.5 iff the nth nodeIndex results
+    # element is 0.5 iff the nth stateIndex results
     # in a loop that is impossible to exit (the game
     # can never end). All other entries are 0
     def getSolutionsForUnreachableStates(self):
         endIsReachable = [0.5] * self.vertexCount
         checkIfParentsAreReachable = []
-        for nodeIndex in range(0, self.vertexCount):
-            temp = self.gameOverStatus(nodeIndex)
+        for stateIndex in range(0, self.vertexCount):
+            temp = self.gameOverStatus(stateIndex)
             if temp == 0 or temp == 1:
-                checkIfParentsAreReachable.append(nodeIndex)
-                endIsReachable[nodeIndex] = 0
+                checkIfParentsAreReachable.append(stateIndex)
+                endIsReachable[stateIndex] = 0
         while(len(checkIfParentsAreReachable)):
-            currNode = checkIfParentsAreReachable.pop()
-            endIsReachable[currNode] = 0
-            for parent in self.parents[currNode]:
+            currState = checkIfParentsAreReachable.pop()
+            endIsReachable[currState] = 0
+            for parent in self.parents[currState]:
                 if endIsReachable[parent]:
                     checkIfParentsAreReachable.append(parent)
         return endIsReachable
 
     # Returns a vector of length vertexCount where the nth
     # element is: a 0 iff player 0 can guaranteed win from the
-    # nth node, a 1 iff player 1 can guaranteed win from the nth
-    # node, -1 otherwise
+    # nth state, a 1 iff player 1 can guaranteed win from the nth
+    # state, -1 otherwise
     def getSolutionsForPerfectPlay(self):
         solution = [-1] * self.vertexCount
-        nodesToEvaluate = []
-        for nodeIndex in range(0, self.vertexCount):
-            temp = self.gameOverStatus(nodeIndex)
+        statesToEvaluate = []
+        for stateIndex in range(0, self.vertexCount):
+            temp = self.gameOverStatus(stateIndex)
             if temp == 0 or temp == 1:
-                for parent in self.parents[nodeIndex]:
-                    nodesToEvaluate.append(parent)
-                solution[nodeIndex] = temp
-        while(len(nodesToEvaluate)):
-            currNode = nodesToEvaluate.pop()
-            if solution[currNode] != -1: continue
-            for child in self.children[currNode]:
-                if solution[child] == self.nodeIndexToState(currNode)[2]:
-                    solution[currNode] = solution[child]
-                    for parent in self.parents[currNode]:
-                        nodesToEvaluate.append(parent)
+                for parent in self.parents[stateIndex]:
+                    statesToEvaluate.append(parent)
+                solution[stateIndex] = temp
+        while(len(statesToEvaluate)):
+            currState = statesToEvaluate.pop()
+            if solution[currState] != -1: continue
+            for child in self.children[currState]:
+                if solution[child] == self.stateIndexToState(currState)[2]:
+                    solution[currState] = solution[child]
+                    for parent in self.parents[currState]:
+                        statesToEvaluate.append(parent)
                         break
             allChildrenMatch = True
-            for child in self.children[currNode]:
-                allChildrenMatch = (solution[child] == solution[self.children[currNode][0]] and solution[child] != -1)
+            for child in self.children[currState]:
+                allChildrenMatch = (solution[child] == solution[self.children[currState][0]] and solution[child] != -1)
             if allChildrenMatch: 
-                solution[currNode] = solution[self.children[currNode][0]]
-                for parent in self.parents[currNode]:
-                    nodesToEvaluate.append(parent)
+                solution[currState] = solution[self.children[currState][0]]
+                for parent in self.parents[currState]:
+                    statesToEvaluate.append(parent)
         return solution
 
     # Prints the entire graph structure. Used for debugging
     def printGraph(self):
-        for node in range(0, self.vertexCount):
-            nodeState = self.nodeIndexToState(node)
-            if len(self.children[node]) == 0:
-                print(f"{nodeState}: has no children;")
+        for stateIndex in range(0, self.vertexCount):
+            state = self.stateIndexToState(stateIndex)
+            if len(self.children[stateIndex]) == 0:
+                print(f"{state}: has no children;")
             else:
                 childStateList = []
-                for childIndex in self.children[node]:
-                    childStateList.append(self.nodeIndexToState(childIndex))
-                print(f"{nodeState}: {childStateList};")
+                for childIndex in self.children[stateIndex]:
+                    childStateList.append(self.stateIndexToState(childIndex))
+                print(f"{state}: {childStateList};")
 
-    # Prints the parents of every node in the graph.
+    # Prints the parents of every state in the graph.
     # Used for debugging
     def printAllParents(self):
-        for node in range(0, self.vertexCount):
-            if len(self.parents[node]) == 0:
-                print(f"{node}: has no parents;")
+        for stateIndex in range(0, self.vertexCount):
+            if len(self.parents[stateIndex]) == 0:
+                print(f"{stateIndex}: has no parents;")
             else:
-                print(f"{node}: {self.parents[node]};")
+                print(f"{stateIndex}: {self.parents[stateIndex]};")
 
-    # Gets the children of each node via getChildrenOfNode()
+    # Gets the children of each state via getChildrenOfState()
     # and then accordingly updates parents[] and children[]
     def initializeGraphEdges(self):
-        for node in range(0, self.vertexCount):
-            childrenStates = self.getChildrenOfNode(self.nodeIndexToState(node))
+        for stateIndex in range(0, self.vertexCount):
+            childrenStates = self.getChildrenOfState(self.stateIndexToState(stateIndex))
             for state in childrenStates:
-                childIndex = self.stateToNodeIndex(state)
-                self.parents[childIndex].append(node)
-                self.children[node].append(childIndex)
+                childIndex = self.stateToStateIndex(state)
+                self.parents[childIndex].append(stateIndex)
+                self.children[stateIndex].append(childIndex)
     
     # Returns whether the game is over, and if it is, who won
-    def gameOverStatus(self, nodeIndex):
-        state = self.nodeIndexToState(nodeIndex)
+    def gameOverStatus(self, stateIndex):
+        state = self.stateIndexToState(stateIndex)
         if state[0] == (0, 0) and state[1] == (0, 0):
             return 0.5
         elif state[0] == (0, 0):
@@ -112,20 +112,20 @@ class Graph:
         else:
             return -1
 
-    # Returns the state notation for the given node index
-    # i.e. if the numOfFingers per hand is 5, then node 63
+    # Returns the state notation for the given state index
+    # i.e. if the numOfFingers per hand is 5, then state 63
     # would be the state ((0, 4), (0, 3), 0)
-    def nodeIndexToState(self, index):
+    def stateIndexToState(self, index):
         numOfHands = len(self.handSet)
         playerTurn = int(index >= (numOfHands * numOfHands))
         playerZeroHandIndex = (int(index / numOfHands)) % (numOfHands)
         playerOneHandIndex = index % numOfHands
         return (self.handSet[playerZeroHandIndex], self.handSet[playerOneHandIndex], playerTurn)
 
-    # Returns the node index for the given state notation
+    # Returns the state index for the given state notation
     # i.e. if the numOfFingers per hand is 5, then the 
-    # state ((0, 4), (0, 3), 0) would be node index 63
-    def stateToNodeIndex(self, state):
+    # state ((0, 4), (0, 3), 0) would be state index 63
+    def stateToStateIndex(self, state):
         output = 0
         output += self.handSet.index(state[0]) * len(self.handSet)
         output += self.handSet.index(state[1])
@@ -145,7 +145,7 @@ class Graph:
                 handSet.append((x, y))
         return handSet
 
-    def getChildrenOfNode(self, parentState):
+    def getChildrenOfState(self, parentState):
         childStates = []
         tapStates = self.getAllTapStates(parentState)
         for state in tapStates:
@@ -158,7 +158,7 @@ class Graph:
 
     def getAllSwitchStates(self, state):
         switchStates = []
-        if (self.gameOverStatus(self.stateToNodeIndex(state)) + 1):
+        if (self.gameOverStatus(self.stateToStateIndex(state)) + 1):
             return switchStates
         if state[2] == 0:
             activePlayerState = state[0]
@@ -225,12 +225,12 @@ class Graph:
         return temp
 
     # Iterates through a list of state notations
-    # and returns the corresponding list of node 
+    # and returns the corresponding list of state 
     # indexes
     def getAllStateIndexes(self, listOfStates):
         listOfIndexes = []
         for state in listOfStates:
-            listOfIndexes.append(self.stateToNodeIndex(state))
+            listOfIndexes.append(self.stateToStateIndex(state))
         return listOfIndexes
 
     # Solves a matrix equation to rank every 
@@ -253,50 +253,50 @@ class Graph:
         # See self.getUnreachableStates for more information
         if unreachableStates == None:
             unreachableStates = [0] * self.vertexCount
-            unreachableStates[g.stateToNodeIndex(((0, 0), (0, 0), 0))] = 0.5
-            unreachableStates[g.stateToNodeIndex(((0, 0), (0, 0), 1))] = 0.5
+            unreachableStates[g.stateToStateIndex(((0, 0), (0, 0), 0))] = 0.5
+            unreachableStates[g.stateToStateIndex(((0, 0), (0, 0), 1))] = 0.5
         mat = np.zeros((self.vertexCount, self.vertexCount))
         solution = np.zeros(self.vertexCount)
         # assign the rest of the states a value here:
-        for node in range(0, self.vertexCount):
-            if unreachableStates[node]:
-                mat[node][node] = 1
-                solution[node] = unreachableStates[node]
-            elif perfectPlaySolutions[node] != -1:
-                mat[node][node] = 1
-                solution[node] = perfectPlaySolutions[node]
+        for stateIndex in range(0, self.vertexCount):
+            if unreachableStates[stateIndex]:
+                mat[stateIndex][stateIndex] = 1
+                solution[stateIndex] = unreachableStates[stateIndex]
+            elif perfectPlaySolutions[stateIndex] != -1:
+                mat[stateIndex][stateIndex] = 1
+                solution[stateIndex] = perfectPlaySolutions[stateIndex]
             else:
-                mat[node][node] = len(self.children[node])
-                for child in self.children[node]:
-                    mat[node][child] = -1
+                mat[stateIndex][stateIndex] = len(self.children[stateIndex])
+                for child in self.children[stateIndex]:
+                    mat[stateIndex][child] = -1
         return np.linalg.solve(mat, solution)
 
     def chooseBestMove(self, rankings, stateIndex):
         bestDiff = 2
         bestState = 0
         for child in self.children[stateIndex]:
-            diff = abs(rankings[child] - self.nodeIndexToState(stateIndex)[2])
+            diff = abs(rankings[child] - self.stateIndexToState(stateIndex)[2])
             if diff < bestDiff:
                 bestDiff = diff
                 bestState = child
         return bestState
 
-    def fairestNodes(self, ranks):
+    def fairestStates(self, ranks):
         ranksDict = {}
         for i in range(0, self.vertexCount):
-            ranksDict.update({self.nodeIndexToState(i) : abs(ranks[i] - 0.5)})
+            ranksDict.update({self.stateIndexToState(i) : abs(ranks[i] - 0.5)})
         sortedDict = dict(sorted(ranksDict.items(), key=lambda item: item[1]))
         for item in sortedDict:
-            print(f"{item} : {ranks[self.stateToNodeIndex(item)]}")
+            print(f"{item} : {ranks[self.stateToStateIndex(item)]}")
 
     def playGame(self, startState, ranks):
         currState = startState
         visitedStates = []
         visitedStates.append(currState)
-        print(f"{self.nodeIndexToState(currState)} : {ranks[currState]}")
+        print(f"{self.stateIndexToState(currState)} : {ranks[currState]}")
         while(not (self.gameOverStatus(currState) == 0 or self.gameOverStatus(currState) == 1)):
             currState = self.chooseBestMove(ranks, currState)
-            print(f"{self.nodeIndexToState(currState)} : {ranks[currState]}")
+            print(f"{self.stateIndexToState(currState)} : {ranks[currState]}")
             if currState in visitedStates:
                 return
             else:
@@ -305,9 +305,10 @@ class Graph:
 if __name__ == "__main__":
     g = Graph(5)
     pp = g.getSolutionsForPerfectPlay()
-    ranks = g.solveForStateRankings(perfectPlaySolutions=pp)
-    # g.fairestNodes(ranks)
-    startState = ((1, 1), (1, 1), 0)
-    startState = g.stateToNodeIndex(startState)
-    g.playGame(startState, ranks)
+    ur = g.getSolutionsForUnreachableStates()
+    ranks = g.solveForStateRankings(perfectPlaySolutions=pp, unreachableStates=ur)
+    g.fairestStates(ranks)
+    #startState = ((1, 1), (1, 1), 0)
+    #startState = g.stateToStateIndex(startState)
+    #g.playGame(startState, ranks)
     

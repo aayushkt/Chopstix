@@ -39,18 +39,31 @@ Next, I translate this to an actual game state. At any point in the game, each p
 Finally, just for serialization sake, I designate each of these states an index. I enumerate over each state and assign it a number as so:
 
 ((0,0), (0,0), 0) -> 0
+
 ((0,0), (0,1), 0) -> 1
+
 ((0,0), (0,2), 0) -> 2
+
 .
+
 .
+
 .
+
 ((4, 4), (4, 4), 0) -> 224
+
 ((0, 0), (0, 0), 1) -> 225
+
 ((0, 0), (0, 1), 1) -> 226
+
 .
+
 .
+
 .
+
 ((4, 4), (3, 4), 1) -> 448
+
 ((4, 4), (4, 4), 1) -> 449
 
 After all of this, we now have a way to represent any point in a game of chopsticks as a single number. Using each of these states and their indexes, we can model the whole game as a state machine - players take the state they are currently in, make an action, and cause the game to proceed to a new state. 

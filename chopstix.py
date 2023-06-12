@@ -1,14 +1,30 @@
 import numpy as np
 
 class ChopstixBot:
+
+    # The graph of game states is stored as two dictionaries, one mapping each
+    # each state index to it's parent state indexes, and the other mapping
+    # each state index to it's child state indexes
     parents = []
     children = []
+
+    # The total number of states in the graph
     stateCount = 0
-    numOfFingers = 0
+    
+    # The number of fingers on each hand. Generally set to 5, but can be changed.
+    # Note that as this number grows, the size of the graph grows O(n^2)
+    numOfFingers = 5
+    
+    # List of all possible tuples a player could have. If numOfFingers == 5, then handSet will be
+    # [(0,0),(0,1),(0,2),(0,3),(0,4),(1,1),(1,2),(1,3),(1,4),(2,2),(2,3),(2,4),(3,3),(3,4),(4,4)]
     handSet = []
+
+    # If switching is allowed, players can 'switch' instead of the normal 'attack' on their turn.
+    # To switch, a player can redistribute the total number of fingers on each hand, i.e. going
+    # from (2, 3) -> (1, 4) or (1, 3) -> (0, 4).
     switchingAllowed = True
 
-    def __init__(self, numOfFingers, switchingAllowed):
+    def __init__(self, numOfFingers=5, switchingAllowed=True):
         self.numOfFingers = numOfFingers
         self.switchingAllowed = switchingAllowed
         self.handSet = self.generateHandSet(numOfFingers)
@@ -19,40 +35,49 @@ class ChopstixBot:
             self.children.append([])
         self.initializeGraphEdges()
 
-    # returns a vector of length stateCount where the nth
-    # element is 0.5 iff the nth stateIndex is indeterminate.
-    # All other entries are 0
-    # A state is indeterminate iff for all states that could
-    # be reached from that state, none result in a player winning
+
+    # returns a list of length {stateCount} where the nth
+    # element is 0.5 if and only if the nth stateIndex is 
+    # indeterminate. All other entries are 0.
+    # A state is indeterminate if and only if, for all states that could
+    # be reached from that state (directly or indirectly), none result in a player winning
     # (Often occurs if switching is not allowed, and is usually just
     # two players stuck in an infinite loop with no other options)
     def getSolutionsForIndeterminateStates(self):
-        determinateStates = [0.5] * self.stateCount
-        checkIfParentsAreReachable = []
+        # Begin by assuming all states are indeterminate
+        indeterminateStates = [0.5] * self.stateCount
+        statesToProcess = []
+        # For every state, if the game ends in that state, it is not indeterminate
+        # So, we store it in statesToProcess[] for processing
         for stateIndex in range(0, self.stateCount):
             temp = self.gameOverStatus(stateIndex)
             if temp == 0 or temp == 1:
-                checkIfParentsAreReachable.append(stateIndex)
-                determinateStates[stateIndex] = 0
-        while(len(checkIfParentsAreReachable)):
-            currState = checkIfParentsAreReachable.pop()
-            determinateStates[currState] = 0
+                statesToProcess.append(stateIndex)
+        # Unprocessed non-indeterminate states are set to 0, and their parents
+        # must also be non-indeterminate. Therefore, their parents are stored for 
+        # processing (unless they have already been marked non-indeterminate).
+        # This process is repeated until there are no states left to be processed.
+        while(len(statesToProcess)):
+            currState = statesToProcess.pop()
+            indeterminateStates[currState] = 0
             for parent in self.parents[currState]:
-                if determinateStates[parent]:
-                    checkIfParentsAreReachable.append(parent)
-        return determinateStates
+                if indeterminateStates[parent]:
+                    statesToProcess.append(parent)
+        return indeterminateStates
 
-    # Returns a vector of length stateCount where the nth
-    # element is: a 0 iff player 0 can guaranteed win from the
-    # nth state, a 1 iff player 1 can guaranteed win from the nth
-    # state, -1 otherwise
+
+    # Returns a list of length {stateCount} where the nth element is:
+    # 0 if and only if player 0 can guaranteed win from the nth state, 
+    # 1 if and only if player 1 can guaranteed win from the nth state,
+    # -1 otherwise
     def getSolutionsForPerfectPlay(self):
         # All states start out as neither a win or loss
         solution = [-1] * self.stateCount
         # States we need to evaluate later will be stored here
         statesToEvaluate = []
-        # For each state, if it is a win/loss, store all parents 
-        # of that state to be a potential guarantee win/loss
+        # For each state, if it is a win or loss, store all parents 
+        # of that state to be a potential guarantee win or loss, and 
+        # set that state to 0 or 1 for win or loss
         for stateIndex in range(0, self.stateCount):
             temp = self.gameOverStatus(stateIndex)
             if temp == 0 or temp == 1:
@@ -60,28 +85,31 @@ class ChopstixBot:
                     statesToEvaluate.append(parent)
                 solution[stateIndex] = temp
         # Now we iterate through the rest of the graph
-        # from the 'leaves' (game over states) upward
         while(len(statesToEvaluate)):
             # For each state we need to evaluate,
             currState = statesToEvaluate.pop()
             # If it hasn't been solved yet
             if solution[currState] == -1: 
                 # Check to see if the player whose turn it is can secure a win
+                # i.e. if any of the children states result in a guarantee win,
+                # then the current state is a guaranteed win
                 for child in self.children[currState]:
                     if solution[child] == self.stateIndexToState(currState)[2]:
                         solution[currState] = solution[child]
                         for parent in self.parents[currState]:
                             statesToEvaluate.append(parent)
                 # Otherwise its a guaranteed loss if all children are a loss
+                # i.e. the player has no choice but to play to a losing position
                 if solution[currState] == -1:
-                    allChildrenMatch = True
+                    allChildrenLose = True
                     for child in self.children[currState]:
-                        allChildrenMatch = allChildrenMatch and (solution[child] == solution[self.children[currState][0]] and solution[child] != -1)
-                    if allChildrenMatch: 
+                        allChildrenLose = allChildrenLose and solution[child] == solution[self.children[currState][0]] and solution[child] != -1
+                    if allChildrenLose: 
                         solution[currState] = solution[self.children[currState][0]]
                         for parent in self.parents[currState]:
                             statesToEvaluate.append(parent)
         return solution
+
 
     # Prints the entire graph structure. Used for debugging
     def printGraph(self):
@@ -95,6 +123,7 @@ class ChopstixBot:
                     childStateList.append(self.stateIndexToState(childIndex))
                 print(f"{state}: {childStateList};")
 
+
     # Prints the parents of every state in the graph.
     # Used for debugging
     def printAllParents(self):
@@ -104,8 +133,10 @@ class ChopstixBot:
             else:
                 print(f"{stateIndex}: {self.parents[stateIndex]};")
 
+
     # Gets the children of each state via getChildrenOfState()
     # and then accordingly updates parents[] and children[]
+    # In other words, fills out the graph.
     def initializeGraphEdges(self):
         for stateIndex in range(0, self.stateCount):
             childrenStates = self.getChildrenOfState(self.stateIndexToState(stateIndex))
@@ -114,6 +145,7 @@ class ChopstixBot:
                 self.parents[childIndex].append(stateIndex)
                 self.children[stateIndex].append(childIndex)
     
+
     # Returns whether the game is over, and if it is, who won
     def gameOverStatus(self, stateIndex):
         state = self.stateIndexToState(stateIndex)
@@ -126,6 +158,7 @@ class ChopstixBot:
         else:
             return -1
 
+
     # Returns the state notation for the given state index
     # i.e. if the numOfFingers per hand is 5, then state 63
     # would be the state ((0, 4), (0, 3), 0)
@@ -136,9 +169,10 @@ class ChopstixBot:
         playerOneHandIndex = index % numOfHands
         return (self.handSet[playerZeroHandIndex], self.handSet[playerOneHandIndex], playerTurn)
 
+
     # Returns the state index for the given state notation
-    # i.e. if the numOfFingers per hand is 5, then the 
-    # state ((0, 4), (0, 3), 0) would be state index 63
+    # i.e. if the numOfFingers per hand is 5, then state 
+    # notation ((0, 4), (0, 3), 0) would be state index 63
     def stateToStateIndex(self, state):
         output = 0
         output += self.handSet.index(state[0]) * len(self.handSet)
@@ -159,6 +193,7 @@ class ChopstixBot:
                 handSet.append((x, y))
         return handSet
 
+
     def getChildrenOfState(self, parentState):
         childStates = []
         tapStates = self.getAllTapStates(parentState)
@@ -170,6 +205,7 @@ class ChopstixBot:
                 childStates.append(state)
         childStates = self.__removeDuplicates__(childStates)
         return childStates
+
 
     def getAllSwitchStates(self, state):
         switchStates = []
@@ -248,9 +284,7 @@ class ChopstixBot:
             listOfIndexes.append(self.stateToStateIndex(state))
         return listOfIndexes
 
-    # Solves a matrix equation to rank every 
-    # state on how likely it is to win
-    # for each player from a given point
+    # Solves a matrix equation to rank every state on how likely it is to win for each player from a given point
     # INPUT: (optional) perfectPlaySolutions vector as generated by self.getSolutionsForPerfectPlay
     #        (optional) indeterminateStates vector as generated by self.getSolutionsForIndeterminateStates
     def solveForStateRankings(self, perfectPlaySolutions = None, indeterminateStates = None):
@@ -262,7 +296,7 @@ class ChopstixBot:
         #  
         # This would correspond to a perfectPlay vector of all -1's, except for the end game states with
         # values of 0 or 1 to determine which player wins in the end. See 
-        # self.getSolutionsForPerfectPlay for more information
+        # self.getSolutionsForPerfectPlay() for more information
         if perfectPlaySolutions == None:
             perfectPlaySolutions = [-1] * self.stateCount
             for stateIndex in range(self.stateCount):
@@ -273,7 +307,7 @@ class ChopstixBot:
         # If an indeterminate state vector is not given, we assume that all game states can eventually
         # reach an end in the game, except the two states where both players have no fingers available.
         # this corresponds to an indeterminate state vector of [0.5, 0, 0, ..., 0, 0.5, 0, ..., 0, 0]
-        # See self.getIndeterminateStates for more information
+        # See self.getIndeterminateStates() for more information
         if indeterminateStates == None:
             indeterminateStates = [0] * self.stateCount
             indeterminateStates[self.stateToStateIndex(((0, 0), (0, 0), 0))] = 0.5
@@ -376,14 +410,18 @@ class ChopstixBot:
 
 
 if __name__ == "__main__":
-    CXBot = ChopstixBot(5, False)
+    CXBot = ChopstixBot(5, True)
     perfectPlay = CXBot.getSolutionsForPerfectPlay()
     indeterminateStates = CXBot.getSolutionsForIndeterminateStates()
     ranks = CXBot.solveForStateRankings(perfectPlay, indeterminateStates)
     
-    #CXBot.fairestStates(ranks, ur)
-
-    startState = ((1, 2), (1, 1), 1)
+    # for i in range(0, CXBot.stateCount):
+    #     print(str(CXBot.stateIndexToState(i)) + " -> " + str(i))
+    #CXBot.fairestStates(ranks, indeterminateStates)
+    #print(ranks)
+    startState = ((1, 1), (1, 2), 1)
     startStateIndex = CXBot.stateToStateIndex(startState)
-    CXBot.playAgainstPlayer(startStateIndex, ranks)
+    print(indeterminateStates)
+    #CXBot.playAgainstPlayer(startStateIndex, ranks)
     #CXBot.playAgainstSelf(startStateIndex, ranks)
+    #print(CXBot.getAllSwitchStates(startState))

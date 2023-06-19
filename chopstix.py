@@ -217,19 +217,18 @@ class ChopstixBot:
         else:
             activePlayerState = state[1]
             fingerSum = state[1][0] + state[1][1]
-        for leftHand in range(0, self.numOfFingers + 1):
+        for leftHand in range(0, self.numOfFingers):
             rightHand = fingerSum - leftHand
-            if rightHand >= 0 and rightHand <= self.numOfFingers and not (leftHand, rightHand) == activePlayerState:
-                leftHand = leftHand % self.numOfFingers
-                rightHand = rightHand % self.numOfFingers
+            if rightHand >= 0 and rightHand < self.numOfFingers:
                 if leftHand > rightHand:
                     temp = leftHand
                     leftHand = rightHand
                     rightHand = temp
-                if state[2] == 0:
-                    switchStates.append(((leftHand, rightHand), state[1], 1))
-                else:
-                    switchStates.append((state[0], (leftHand, rightHand), 0))
+                if (leftHand, rightHand) != activePlayerState:
+                    if state[2] == 0:
+                        switchStates.append(((leftHand, rightHand), state[1], 1))
+                    else:
+                        switchStates.append((state[0], (leftHand, rightHand), 0))
         switchStates = self.__removeDuplicates__(switchStates)
         return switchStates
 
@@ -415,13 +414,8 @@ if __name__ == "__main__":
     indeterminateStates = CXBot.getSolutionsForIndeterminateStates()
     ranks = CXBot.solveForStateRankings(perfectPlay, indeterminateStates)
     
-    # for i in range(0, CXBot.stateCount):
-    #     print(str(CXBot.stateIndexToState(i)) + " -> " + str(i))
     #CXBot.fairestStates(ranks, indeterminateStates)
-    #print(ranks)
-    startState = ((1, 1), (1, 2), 1)
-    startStateIndex = CXBot.stateToStateIndex(startState)
-    print(indeterminateStates)
+    #startState = ((1, 1), (1, 2), 1)
+    #startStateIndex = CXBot.stateToStateIndex(startState)
     #CXBot.playAgainstPlayer(startStateIndex, ranks)
     #CXBot.playAgainstSelf(startStateIndex, ranks)
-    #print(CXBot.getAllSwitchStates(startState))

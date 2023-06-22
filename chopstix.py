@@ -1,421 +1,313 @@
 import numpy as np
 
 class ChopstixBot:
+    # These two store a list of parent and children states
+    # for each state respectively. i.e. children[17] is 
+    # a list of all the states that are direct children 
+    # of the state with index 17.
+    #
+    # These get initialized during initializeGraphEdges()
+    parents = None
+    children = None
 
-    # The graph of game states is stored as two dictionaries, one mapping each
-    # each state index to it's parent state indexes, and the other mapping
-    # each state index to it's child state indexes
-    parents = []
-    children = []
+    # This is a list representing the type of state each 
+    # state is. See classifyStates() for more info.
+    #
+    # This field is initialized during classifyStates()
+    classifiedStates = None
 
-    # The total number of states in the graph
-    stateCount = 0
-    
-    # The number of fingers on each hand. Generally set to 5, but can be changed.
-    # Note that as this number grows, the size of the graph grows O(n^2)
-    numOfFingers = 5
-    
-    # List of all possible tuples a player could have. If numOfFingers == 5, then handSet will be
-    # [(0,0),(0,1),(0,2),(0,3),(0,4),(1,1),(1,2),(1,3),(1,4),(2,2),(2,3),(2,4),(3,3),(3,4),(4,4)]
+    # This is a list which contains the final 'rank' (how
+    # good or bad a state is) for every state.
+    #
+    # This field is initialized during computeRanks()
+    ranks = None
+
+    # This field is a number representing how many
+    # states there are in the game.
+    stateCount = None
+
+    # This field represents the total number of fingers
+    # players have on each hand. Default value is 5.
+    numOfFingers = None
+
+    # This is a list of possible sets of hands a player may
+    # have during the game. See generateHandSet() for more info.
+    #
+    # This field is initialized during generateHandSet()
     handSet = []
 
-    # If switching is allowed, players can 'switch' instead of the normal 'attack' on their turn.
-    # To switch, a player can redistribute the total number of fingers on each hand, i.e. going
-    # from (2, 3) -> (1, 4) or (1, 3) -> (0, 4).
+    # This field represents whether players are allowed to
+    # 'switch' or rearrange fingers between hands on their turn
+    #
+    # Default value is True.
     switchingAllowed = True
 
-    def __init__(self, numOfFingers=5, switchingAllowed=True):
+    # This field represents whether players are allowed to 
+    # 'switch' or rearrange their fingers into the same configuration
+    # on their turn, effectively skipping it. This variable is ignored
+    # if switchingAllowed is set to False.
+    #
+    # Default value is False
+    skippingAllowed = False
+
+    def __init__(self, numOfFingers=5, switchingAllowed=True, skippingAllowed=False):
+        """Executes the chopstix algorithm in four distinct steps:
+        1) All appropriate variables are initialized and states are assigned indexes
+        2) The graph is generated, states are connected to each other according to settings
+        3) States are classified into specific types for computation
+        4) Using the classifications, the rank for each state is computed"""
+        # Fields are initialized, algorithm is ready to be run
         self.numOfFingers = numOfFingers
         self.switchingAllowed = switchingAllowed
         self.handSet = self.generateHandSet(numOfFingers)
-        self.stateCount = len(self.handSet) * len(self.handSet) * 2
-        self.stateCount = self.stateCount
+        self.stateCount = len(self.handSet) * len(self.handSet)
+        self.skippingAllowed = skippingAllowed
+        self.parents = []
+        self.children = []
         for _ in range(0, self.stateCount):
             self.parents.append([])
             self.children.append([])
+        
+        # Now all the states will be connected up to one another
+        # representing which states lead to which other states
+        # in the graph. This is done by filling out the self.parents[]
+        # and self.children[] fields.
         self.initializeGraphEdges()
 
+        # Now that the graph states have all been connected together
+        # properly, we can classify which states are of what type.
+        # The results are stored in the field self.classifiedStates
+        self.classifyStates()
 
-    # returns a list of length {stateCount} where the nth
-    # element is 0.5 if and only if the nth stateIndex is 
-    # indeterminate. All other entries are 0.
-    # A state is indeterminate if and only if, for all states that could
-    # be reached from that state (directly or indirectly), none result in a player winning
-    # (Often occurs if switching is not allowed, and is usually just
-    # two players stuck in an infinite loop with no other options)
-    def getSolutionsForIndeterminateStates(self):
-        # Begin by assuming all states are indeterminate
-        indeterminateStates = [0.5] * self.stateCount
-        statesToProcess = []
-        # For every state, if the game ends in that state, it is not indeterminate
-        # So, we store it in statesToProcess[] for processing
-        for stateIndex in range(0, self.stateCount):
-            temp = self.gameOverStatus(stateIndex)
-            if temp == 0 or temp == 1:
-                statesToProcess.append(stateIndex)
-        # Unprocessed non-indeterminate states are set to 0, and their parents
-        # must also be non-indeterminate. Therefore, their parents are stored for 
-        # processing (unless they have already been marked non-indeterminate).
-        # This process is repeated until there are no states left to be processed.
-        while(len(statesToProcess)):
-            currState = statesToProcess.pop()
-            indeterminateStates[currState] = 0
-            for parent in self.parents[currState]:
-                if indeterminateStates[parent]:
-                    statesToProcess.append(parent)
-        return indeterminateStates
+        # Now we compute the ranks of each state, using the classifications
+        # stored in self.classifiedStates. The result of this is stored in 
+        # the field self.ranks
+        self.computeRanks()
 
-
-    # Returns a list of length {stateCount} where the nth element is:
-    # 0 if and only if player 0 can guaranteed win from the nth state, 
-    # 1 if and only if player 1 can guaranteed win from the nth state,
-    # -1 otherwise
-    def getSolutionsForPerfectPlay(self):
-        # All states start out as neither a win or loss
-        solution = [-1] * self.stateCount
-        # States we need to evaluate later will be stored here
-        statesToEvaluate = []
-        # For each state, if it is a win or loss, store all parents 
-        # of that state to be a potential guarantee win or loss, and 
-        # set that state to 0 or 1 for win or loss
-        for stateIndex in range(0, self.stateCount):
-            temp = self.gameOverStatus(stateIndex)
-            if temp == 0 or temp == 1:
-                for parent in self.parents[stateIndex]:
-                    statesToEvaluate.append(parent)
-                solution[stateIndex] = temp
-        # Now we iterate through the rest of the graph
-        while(len(statesToEvaluate)):
-            # For each state we need to evaluate,
-            currState = statesToEvaluate.pop()
-            # If it hasn't been solved yet
-            if solution[currState] == -1: 
-                # Check to see if the player whose turn it is can secure a win
-                # i.e. if any of the children states result in a guarantee win,
-                # then the current state is a guaranteed win
-                for child in self.children[currState]:
-                    if solution[child] == self.stateIndexToState(currState)[2]:
-                        solution[currState] = solution[child]
-                        for parent in self.parents[currState]:
-                            statesToEvaluate.append(parent)
-                # Otherwise its a guaranteed loss if all children are a loss
-                # i.e. the player has no choice but to play to a losing position
-                if solution[currState] == -1:
-                    allChildrenLose = True
-                    for child in self.children[currState]:
-                        allChildrenLose = allChildrenLose and solution[child] == solution[self.children[currState][0]] and solution[child] != -1
-                    if allChildrenLose: 
-                        solution[currState] = solution[self.children[currState][0]]
-                        for parent in self.parents[currState]:
-                            statesToEvaluate.append(parent)
-        return solution
-
-
-    # Prints the entire graph structure. Used for debugging
-    def printGraph(self):
-        for stateIndex in range(0, self.stateCount):
-            state = self.stateIndexToState(stateIndex)
-            if len(self.children[stateIndex]) == 0:
-                print(f"{state}: has no children;")
-            else:
-                childStateList = []
-                for childIndex in self.children[stateIndex]:
-                    childStateList.append(self.stateIndexToState(childIndex))
-                print(f"{state}: {childStateList};")
-
-
-    # Prints the parents of every state in the graph.
-    # Used for debugging
-    def printAllParents(self):
-        for stateIndex in range(0, self.stateCount):
-            if len(self.parents[stateIndex]) == 0:
-                print(f"{stateIndex}: has no parents;")
-            else:
-                print(f"{stateIndex}: {self.parents[stateIndex]};")
-
-
-    # Gets the children of each state via getChildrenOfState()
-    # and then accordingly updates parents[] and children[]
-    # In other words, fills out the graph.
-    def initializeGraphEdges(self):
-        for stateIndex in range(0, self.stateCount):
-            childrenStates = self.getChildrenOfState(self.stateIndexToState(stateIndex))
-            for state in childrenStates:
-                childIndex = self.stateToStateIndex(state)
-                self.parents[childIndex].append(stateIndex)
-                self.children[stateIndex].append(childIndex)
-    
-
-    # Returns whether the game is over, and if it is, who won
-    def gameOverStatus(self, stateIndex):
-        state = self.stateIndexToState(stateIndex)
-        if state[0] == (0, 0) and state[1] == (0, 0):
-            return 0.5
-        elif state[0] == (0, 0):
-            return 1
-        elif state[1] == (0, 0):
-            return 0
-        else:
-            return -1
-
-
-    # Returns the state notation for the given state index
-    # i.e. if the numOfFingers per hand is 5, then state 63
-    # would be the state ((0, 4), (0, 3), 0)
-    def stateIndexToState(self, index):
-        numOfHands = len(self.handSet)
-        playerTurn = int(index >= (numOfHands * numOfHands))
-        playerZeroHandIndex = (int(index / numOfHands)) % (numOfHands)
-        playerOneHandIndex = index % numOfHands
-        return (self.handSet[playerZeroHandIndex], self.handSet[playerOneHandIndex], playerTurn)
-
-
-    # Returns the state index for the given state notation
-    # i.e. if the numOfFingers per hand is 5, then state 
-    # notation ((0, 4), (0, 3), 0) would be state index 63
-    def stateToStateIndex(self, state):
-        output = 0
-        output += self.handSet.index(state[0]) * len(self.handSet)
-        output += self.handSet.index(state[1])
-        output += state[2] * len(self.handSet) * len(self.handSet)
-        return output
-
-    # Given a set number of fingers on each hand
-    # (this number is generally 5), generates
-    # all the possible hands a player could have
-    # INPUT: an integer
-    # OUTPUT: a list of pairs in increasing order
-    # i.e. 3 -> [(0,0), (0,1), (0,2), (1,1), (1,2), (2, 2)]
-    def generateHandSet(self, numOfFingers):
+    def generateHandSet(self):
+        """Returns a ordered list of every possible set of hands a player may have, starting with (0, 0) and ending with (numFingers - 1, numFingers - 1)"""
         handSet = []
-        for x in range(0, numOfFingers):
-            for y in range(x, numOfFingers):
+        for x in range(0, self.numOfFingers):
+            for y in range(x, self.numOfFingers):
                 handSet.append((x, y))
         return handSet
-
+    
+    # Given a state in ((a, b), (c, d)) notation,
+    # returns the index number of that state
+    def stateToIndex(self, state):
+        """Given a state in ((a, b), (c, d)) notation, returns the index number of that state"""
+        n = self.numOfFingers
+        a = state[0][0]
+        b = state[0][1]
+        c = state[1][0]
+        d = state[1][1]
+        # This monster formula's derivation will be documented in readme
+        return int((a*n-((a*(a-1))/2)+b-a)*((n*(n+1))/2)+(c*n-(c*(c-1))/2+d-c))
+    
+    def indexToState(self, index):
+        """Given a state's index number, returns the state in ((a, b), (c, d)) notation"""
+        # This monster formula's derivation will be documeted in readme
+        return (self.handSet[int(np.floor(index / len(self.handSet)))], self.handSet[index % len(self.handSet)])
+    
+    def initializeGraphEdges(self):
+        """Initializes the graph structures by filling out the children[] and parent[] fields for each state"""
+        for stateIndex in range(0, self.stateCount):
+            childrenStates = self.getChildrenOfState(self.indexToState(stateIndex))
+            for state in childrenStates:
+                childIndex = self.stateToIndex(state)
+                self.parents[childIndex].append(stateIndex)
+                self.children[stateIndex].append(childIndex)
 
     def getChildrenOfState(self, parentState):
+        """Returns all the possible states that can be reached in one move from the parentState
+        parameter. If the state has no children, returns an empty list.
+        
+        Parameters:
+            parentState - a state in the notation ((a, b), (c, d))
+            
+        Returns:
+            A list of states that are immediate children of {parentState}. May be empty."""
         childStates = []
-        tapStates = self.getAllTapStates(parentState)
-        for state in tapStates:
-            childStates.append(state)
+        attackStates = self.getAllAttackStates(parentState)
+        # If there were no attack states, our opponent has 
+        # no hands left to attack, so they lost the game.
+        # This means there are no children states to go from here
+        # as the game is over.
+        if len(attackStates) == 0:
+            return childStates
+        
+        # Otherwise, we get all the possible states via attacking
+        # and all the possible states via switching, and mark them
+        # as children of this state
+        for state in attackStates:
+            if state not in childStates:
+                childStates.append(state)
         if self.switchingAllowed:
             switchStates = self.getAllSwitchStates(parentState)
             for state in switchStates:
-                childStates.append(state)
-        childStates = self.__removeDuplicates__(childStates)
+                if state not in childStates:
+                    childStates.append(state)
         return childStates
-
+    
+    def getAllAttackStates(self, state):
+        """Returns all the possible states that can be reached in one move from the {state}
+        parameter by attacking an opponents hand. If the state has no such children, returns an empty
+        list.
+        
+        Parameters:
+            state - a state in the notation ((a, b), (c, d))
+            
+        Returns:
+            A list of states that can be reached from {state} by attacking the opponent. 
+            May be empty."""
+        attackStates = []
+        for playerHand in range(0, 2): # For each hand the player has,
+            if state[0][playerHand]: # If it is not zero (they can attack w/ it)
+                for oppHand in range(0, 2): # They can attack either of the opponent's hands
+                    if state[1][oppHand]: # If the opponent's hand is zero
+                        # newValue is the new number on the attacked hand
+                        newValue = (state[1][oppHand] + state[0][playerHand]) % self.numOfFingers
+                        # We have to make sure the opponents hands stay ordered,
+                        # if the new value is greater than the one on the other hand
+                        # then the other hand should come first
+                        # Note: 1-oppHand is the other hand of the opponent
+                        if newValue > state[1][1-oppHand]:
+                            attackStates.append(((state[1][1-oppHand], newValue), state[0]))
+                        else:
+                            attackStates.append(((newValue, state[1][1-oppHand]), state[0]))
+        return attackStates
 
     def getAllSwitchStates(self, state):
+        """Returns all the possible states that can be reached in one move from the {state}
+        parameter by switching. If the state has no such children, returns an empty list.
+        
+        Parameters:
+            state - a state in the notation ((a, b), (c, d))
+            
+        Returns:
+            A list of states that can be reached from {state} by switching. 
+            May be empty."""
+        if state[0] == (0, 0):
+            return []
         switchStates = []
-        if (self.gameOverStatus(self.stateToStateIndex(state)) + 1):
-            return switchStates
-        if state[2] == 0:
-            activePlayerState = state[0]
-            fingerSum = state[0][0] + state[0][1]
-        else:
-            activePlayerState = state[1]
-            fingerSum = state[1][0] + state[1][1]
-        for leftHand in range(0, self.numOfFingers):
-            rightHand = fingerSum - leftHand
-            if rightHand >= 0 and rightHand < self.numOfFingers:
-                if leftHand > rightHand:
-                    temp = leftHand
-                    leftHand = rightHand
-                    rightHand = temp
-                if (leftHand, rightHand) != activePlayerState:
-                    if state[2] == 0:
-                        switchStates.append(((leftHand, rightHand), state[1], 1))
-                    else:
-                        switchStates.append((state[0], (leftHand, rightHand), 0))
-        switchStates = self.__removeDuplicates__(switchStates)
+        sum = state[0][0] + state[0][1]
+        for i in range(0, len(self.handSet)):
+            if(self.handSet[i][0] + self.handSet[i][1] == sum):
+                if(self.skippingAllowed or self.handSet[i] != state[0]):
+                    switchStates.append((state[1], self.handSet[i]))
         return switchStates
 
-    # Returns all states that can be achieved in one turn from the given state.
-    # INPUT: a state in state notation form i.e. ((1, 3), (0, 4), 0)
-    # OUTPUT: a list of states in state notation form (can be empty!)
-    # i.e. [((1, 3), (0, 0), 1), ((1, 3), (0, 2), 1)]
-    def getAllTapStates(self, state):
-        tapStates = []
-        for playerHand in range(0, 2):
-            if state[state[2]][playerHand]:
-                for oppHand in range(0, 2):
-                    # Notice 1-state[2] returns the player whose turn it
-                    # is NOT, aka the opponent
-                    if state[1 - state[2]][oppHand]:
-                        # sum is the amount of fingers that will be on the 
-                        # new hand (belonging to the opponent) after it has been tapped
-                        sum = (state[state[2]][playerHand] + state[1-state[2]][oppHand]) % self.numOfFingers
-                        if (playerHand + oppHand) == 0:
-                            newHands = (sum, state[1 - state[2]][1])
-                        elif (playerHand + oppHand) == 2:
-                            newHands = ((state[1 - state[2]][0], sum))
-                        elif playerHand == 1: # Then we know oppHand == 0,
-                            newHands = (sum, state[1-state[2]][1])
-                        else: # We know playerHand==0 and oppHand==1
-                            newHands = (state[1 - state[2]][0], sum)
-                        if newHands[0] > newHands[1]:
-                            newHands = (newHands[1], newHands[0])
-                        if state[2]:
-                            newState = (newHands, state[1], 0)
-                        else:
-                            newState = (state[0], newHands, 1)
-                        tapStates.append(newState)
-        tapStates = self.__removeDuplicates__(tapStates)
-        return tapStates
+    def gameOverState(self, index):
+        """Returns whether the state with the given index is a game over state, and who won.
+        
+        Parameters:
+            index (int) - The index of the state to check
+            
+        Returns:
+            0.5 - If the state is ((0, 0), (0, 0))
+            0   - If the current player has lost
+            1   - If the current player has won
+            -1  - If neither player has lost
+        """
+        state = self.indexToState(index)
+        if state[0] == (0, 0) and state[1] == (0, 0):
+            return 0.5
+        elif state[0] == (0, 0):
+            return 0
+        elif state[1] == (0, 0):
+            return 1
+        else:
+            return -1
 
-    # Helper function
-    # Removes repeated elements from a list
-    def __removeDuplicates__(self, listObj):
-        temp = []
-        for item in listObj:
-            if item not in temp:
-                temp.append(item)
-        return temp
+    # We have four types of states:
+    # End states - the leaves of the graph = 0/1
+    # Indeterminate states - states with no path to a leaf = 0.5
+    # Guaranteed states - states with guarantee to win = 0/1
+    # General states - states with many potential paths = -1
+    def classifyStates(self):
+        """Classifies each state into one of the four categories below.
+        
+        1) End States - The leaves of the graph, where a player wins
+        2) Indeterminate States - States with no path to a End State
+        3) Guaranteed States - States with a guaranteed path to an End State where a player wins
+        4) General States - States with many potential paths
 
-    # Iterates through a list of state notations
-    # and returns the corresponding list of state 
-    # indexes
-    def getAllStateIndexes(self, listOfStates):
-        listOfIndexes = []
-        for state in listOfStates:
-            listOfIndexes.append(self.stateToStateIndex(state))
-        return listOfIndexes
+        Fills out the classifiedStates field with a list of 0's, 1's, 0.5's and -1's:
+        0 means the state with that index is either an end state or guaranteed state where the
+        player loses.
+        1 means the state with that index is either an end state or guaranteed state wher the
+        player wins.
+        0.5 means the state is indeterminate.
+        -1 means the state is a general state.
 
-    # Solves a matrix equation to rank every state on how likely it is to win for each player from a given point
-    # INPUT: (optional) perfectPlaySolutions vector as generated by self.getSolutionsForPerfectPlay
-    #        (optional) indeterminateStates vector as generated by self.getSolutionsForIndeterminateStates
-    def solveForStateRankings(self, perfectPlaySolutions = None, indeterminateStates = None):
-        # If a perfect play vector is not given, we assume players will simply choose their next move 
-        # randomly (without evaluating which moves result in guaranteed wins). However, each end state
-        # must still correspond with a value of 1 or 0 (depending on who wins).
-        # 
-        # This means each state's ranking will simply be the average of it's childrens ranks.
-        #  
-        # This would correspond to a perfectPlay vector of all -1's, except for the end game states with
-        # values of 0 or 1 to determine which player wins in the end. See 
-        # self.getSolutionsForPerfectPlay() for more information
-        if perfectPlaySolutions == None:
-            perfectPlaySolutions = [-1] * self.stateCount
-            for stateIndex in range(self.stateCount):
-                temp = self.gameOverStatus(stateIndex)
-                if(temp == 0 or temp == 1):
-                    perfectPlaySolutions[stateIndex] = temp
+        This function does not return anything, instead it stores it's results
+        in the classifiedStates field
+        """
+        statesToClassify = []
+        output = [0.5] * self.stateCount
+        for i in range(1, self.stateCount):
+            if len(self.children[i]) == 0:
+                output[i] = self.gameOverState(i)
+                for parent in self.parents[i]:
+                    statesToClassify.append(parent)
 
-        # If an indeterminate state vector is not given, we assume that all game states can eventually
-        # reach an end in the game, except the two states where both players have no fingers available.
-        # this corresponds to an indeterminate state vector of [0.5, 0, 0, ..., 0, 0.5, 0, ..., 0, 0]
-        # See self.getIndeterminateStates() for more information
-        if indeterminateStates == None:
-            indeterminateStates = [0] * self.stateCount
-            indeterminateStates[self.stateToStateIndex(((0, 0), (0, 0), 0))] = 0.5
-            indeterminateStates[self.stateToStateIndex(((0, 0), (0, 0), 1))] = 0.5
+        while len(statesToClassify):
+            currState = statesToClassify.pop()
+            originalValue = output[currState]
+            allChildrenLose = True
+            guaranteedWin = False
+            for child in self.children[currState]:
+                if output[child] != 1:
+                    allChildrenLose = False
+                if output[child] == 0:
+                    guaranteedWin = True
+            if guaranteedWin:
+                output[currState] = 1
+            elif allChildrenLose:
+                output[currState] = 0
+            else:
+                output[currState] = -1
+            if originalValue != output[currState]:
+                for parent in self.parents[currState]:
+                        statesToClassify.append(parent)
+        self.classifiedStates = output
+                
+    def computeRanks(self):
+        """Computes the ranks of each state based on their classifications.
+        End states and guaranteed states are given the rank 0 or 1 according
+        to whether the player loses or wins, respectively. Indeterminate states
+        are given the rank 0.5 to represent a draw. The remaining general states'
+        ranks are calculated via a matrix, with a rank between 0 and 1, closer to 0
+        meaning the state is likely to end up losing, and closer to 1 meaning the 
+        state is more likely to end up with the current player winning.
+        
+        This function does not return anything, instead it stores it's results
+        in the ranks field"""
         mat = np.zeros((self.stateCount, self.stateCount))
         solution = np.zeros(self.stateCount)
         # assign the rest of the states a value here:
         for stateIndex in range(0, self.stateCount):
-            if indeterminateStates[stateIndex]:
+            if self.classifiedStates[stateIndex] != -1:
                 mat[stateIndex][stateIndex] = 1
-                solution[stateIndex] = indeterminateStates[stateIndex]
-            elif perfectPlaySolutions[stateIndex] != -1:
-                mat[stateIndex][stateIndex] = 1
-                solution[stateIndex] = perfectPlaySolutions[stateIndex]
+                solution[stateIndex] = self.classifiedStates[stateIndex]
             else:
                 mat[stateIndex][stateIndex] = len(self.children[stateIndex])
+                solution[stateIndex] = len(self.children[stateIndex])
                 for child in self.children[stateIndex]:
-                    mat[stateIndex][child] = -1
-        return np.linalg.solve(mat, solution)
-
-    def chooseBestMove(self, rankings, stateIndex):
-        bestDiff = 2
-        bestState = 0
-        for child in self.children[stateIndex]:
-            diff = abs(rankings[child] - self.stateIndexToState(stateIndex)[2])
-            if diff < bestDiff:
-                bestDiff = diff
-                bestState = child
-        return bestState
-
-    def printStateOptions(self, state, ranks):
-        print(f"{state} : {ranks[self.stateToStateIndex(state)]}")
-        if(not len(self.children[self.stateToStateIndex(state)])):
-            print("GAME OVER, no moves can be made")
-        else:
-            print("Options are:")
-            for child in self.children[self.stateToStateIndex(state)]:
-                print(f"\t{self.stateIndexToState(child)} : {ranks[child]}")
-        print("\n")
-
-    # Prints all the rankings of every state that
-    # isn't a guaranteed win/loss for a player
-    # and doesn't end in a draw
-    # i.e. states with rank != 1.0 and 
-    # states with rank != 0 and
-    # states with indeterminateStates of 0.0
-    # i.e. all states with a decimal rank != 0.5
-    # due to being indeterminate
-    def fairestStates(self, ranks, indeterminateStates):
-        fairestNode = None
-        for stateIndex in range(self.stateCount):
-            if not(indeterminateStates[stateIndex] or ranks[stateIndex] == 1 or ranks[stateIndex] == 0):
-                print(f"{self.stateIndexToState(stateIndex)} : {ranks[stateIndex]}")
-                if(fairestNode == None or abs(ranks[fairestNode]-0.5) > abs(ranks[stateIndex]-0.5)):
-                    fairestNode = stateIndex
-        print(f"The fairest state is: {CXBot.stateIndexToState(fairestNode)}: {ranks[fairestNode]}")
-    
-    def playAgainstSelf(self, startState, ranks):
-        currState = startState
-        visitedStates = []
-        visitedStates.append(currState)
-        while(not (self.gameOverStatus(currState) == 0 or self.gameOverStatus(currState) == 1)):
-            debugFlag = True
-            if(debugFlag):
-                self.printStateOptions(self.stateIndexToState(currState), ranks)
-            else:
-                print(f"{self.stateIndexToState(currState)} : {ranks[currState]}")
-            currState = self.chooseBestMove(ranks, currState)
-            if currState in visitedStates:
-                print(f"{self.stateIndexToState(currState)} : {ranks[currState]}")
-                print("We've been here before - we're going in circles!")
-                return
-            else:
-                visitedStates.append(currState)
-        print(f"{self.stateIndexToState(currState)} : {ranks[currState]}")
-        print(f"GAME OVER - PLAYER {self.stateIndexToState(currState)[2] - 1} WINS!")
-
-    def playAgainstPlayer(self, startStateIndex, ranks):
-        currStateIndex = startStateIndex
-        done = False
-        while(not done):
-            if(self.gameOverStatus(currStateIndex) == 0 or self.gameOverStatus(currStateIndex) == 1):
-                print(f"GAME OVER - PLAYER {self.stateIndexToState(currStateIndex)[2] - 1} WINS!")
-                done = True
-            else:
-                for i in range(100):
-                    print()
-                print(f"The current state is {self.stateIndexToState(currStateIndex)}")
-                if(self.stateIndexToState(currStateIndex)[2]):
-                    for i in range(len(self.children[currStateIndex])):
-                        print(f"{i}: {self.stateIndexToState(self.children[currStateIndex][i])}")
-                    selected = input("Which state do you choose? Type \"exit\" to exit.\n")
-                    if(selected == "exit" or selected == "e"):
-                        done = True
-                    else:
-                        selected = int(selected)
-                        currStateIndex = self.children[currStateIndex][selected]
-                else:
-                    currStateIndex = self.chooseBestMove(ranks, currStateIndex)
-
+                    mat[stateIndex][child] = 1
+        self.ranks = np.linalg.solve(mat, solution)
 
 if __name__ == "__main__":
     CXBot = ChopstixBot(5, True)
-    perfectPlay = CXBot.getSolutionsForPerfectPlay()
-    indeterminateStates = CXBot.getSolutionsForIndeterminateStates()
-    ranks = CXBot.solveForStateRankings(perfectPlay, indeterminateStates)
     
-    #CXBot.fairestStates(ranks, indeterminateStates)
-    #startState = ((1, 1), (1, 2), 1)
-    #startStateIndex = CXBot.stateToStateIndex(startState)
-    #CXBot.playAgainstPlayer(startStateIndex, ranks)
-    #CXBot.playAgainstSelf(startStateIndex, ranks)
+    # print ranks
+    # for i in range(0, len(ranks)):
+    #     print(f"{i} -> {ranks[i]}")
+
+    # print children
+    # for i in range(0, CXBot.stateCount):
+    #     print(f"{i} -> {CXBot.children[i]}")
+    #     print()
+
+    # print index or state
+    # print(f"{CXBot.stateIndexToState(56)}")
